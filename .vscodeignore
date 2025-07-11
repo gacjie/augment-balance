@@ -35,38 +35,5 @@ INSTALLATION.md
 **/package-lock.json
 **/yarn.lock
 
-# Node modules optimization
-node_modules/.bin/**
-node_modules/**/test/**
-node_modules/**/tests/**
-node_modules/**/*.test.js
-node_modules/**/*.spec.js
-node_modules/**/example/**
-node_modules/**/examples/**
-node_modules/**/demo/**
-node_modules/**/docs/**
-node_modules/**/doc/**
-node_modules/**/*.md
-node_modules/**/README*
-node_modules/**/CHANGELOG*
-node_modules/**/LICENSE*
-node_modules/**/HISTORY*
-node_modules/**/.travis.yml
-node_modules/**/.github/**
-node_modules/**/Makefile
-node_modules/**/makefile
-node_modules/**/*.map
-node_modules/**/*.ts
-node_modules/**/*.coffee
-node_modules/**/*.scss
-node_modules/**/*.sass
-node_modules/**/*.less
-node_modules/**/*.styl
-
-# Specific large packages we don't need
-node_modules/@types/**
-node_modules/typescript/**
-node_modules/eslint/**
-node_modules/@typescript-eslint/**
-node_modules/@eslint/**
-node_modules/vsce/**
+# Node modules - completely exclude since we use webpack bundling
+node_modules/**
