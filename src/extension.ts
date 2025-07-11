@@ -199,7 +199,7 @@ let extension: AugmentBalanceExtension | undefined;
 
 export function activate(context: vscode.ExtensionContext) {
     console.log('Augment Balance扩展已激活');
-    
+
     try {
         extension = new AugmentBalanceExtension(context);
         

@@ -22,8 +22,10 @@ export class StatusBarManager {
         // 设置点击命令
         this.statusBarItem.command = 'augmentBalance.openSettings';
 
-        // 初始显示
-        this.updateDisplay();
+        // 设置初始状态为未配置
+        this.setNotConfigured();
+
+        // 显示状态栏项目
         this.statusBarItem.show();
     }
 
