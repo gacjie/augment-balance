@@ -1,12 +1,20 @@
 {
   "name": "augment-balance",
   "displayName": "Augment Balance",
-  "description": "显示Augment Code的剩余套餐额度",
-  "version": "1.0.0",
-  "publisher": "augment-code",
+  "description": "Display remaining quota for Augment Code API usage",
+  "version": "1.0.1",
+  "publisher": "gacjie",
+  "license": "MIT",
+  "author": {
+    "name": "gacjie"
+  },
+  "homepage": "https://github.com/gacjie/augment-balance",
   "repository": {
     "type": "git",
-    "url": "https://github.com/augment-code/augment-balance.git"
+    "url": "https://github.com/gacjie/augment-balance.git"
+  },
+  "bugs": {
+    "url": "https://github.com/gacjie/augment-balance/issues"
   },
   "engines": {
     "vscode": "^1.74.0"
@@ -21,6 +29,10 @@
     "api"
   ],
   "icon": "favicon.ico",
+  "galleryBanner": {
+    "color": "#C80000",
+    "theme": "dark"
+  },
   "activationEvents": [
     "onStartupFinished"
   ],
@@ -32,41 +44,42 @@
         "augmentBalance.token": {
           "type": "string",
           "default": "",
-          "description": "用户的API token",
-          "order": 1
+          "description": "API token for Augment Code",
+          "scope": "application"
         },
         "augmentBalance.updateInterval": {
           "type": "number",
           "default": 600,
           "minimum": 60,
           "maximum": 3600,
-          "description": "数据更新间隔时间（秒）",
-          "order": 2
+          "description": "Data update interval in seconds",
+          "scope": "application"
         }
       }
     },
     "commands": [
       {
         "command": "augmentBalance.openSettings",
-        "title": "打开Augment Balance设置"
+        "title": "Open Settings",
+        "category": "Augment Balance"
       },
       {
         "command": "augmentBalance.refreshBalance",
-        "title": "刷新余额"
+        "title": "Refresh Balance",
+        "category": "Augment Balance"
       }
     ]
   },
   "scripts": {
-    "vscode:prepublish": "npm run package-ext",
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
-    "package-ext": "webpack --mode production --devtool hidden-source-map",
-    "compile-web": "webpack",
-    "watch-web": "webpack --watch",
-    "pretest": "npm run compile && npm run lint",
+    "vscode:prepublish": "npm run package",
+    "compile": "webpack",
+    "watch": "webpack --watch",
+    "package": "webpack --mode production --devtool hidden-source-map",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
     "lint": "eslint src --ext ts",
-    "test": "node ./out/test/runTest.js",
-    "package": "vsce package"
+    "test": "node ./out/test/runTest.js"
   },
   "devDependencies": {
     "@types/node": "16.x",
