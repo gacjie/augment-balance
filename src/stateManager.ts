@@ -14,7 +14,6 @@ export interface BalanceData {
 }
 
 export class StateManager {
-    private static readonly CUSTOMER_CACHE_KEY = 'augmentBalance.customerCache';
     private static readonly BALANCE_CACHE_KEY = 'augmentBalance.balanceCache';
     private static readonly CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24小时
 
@@ -27,20 +26,21 @@ export class StateManager {
     }
 
     /**
+     * 生成Customer ID缓存键名
+     */
+    private getCustomerCacheKey(token: string): string {
+        return `${token}_CustomerID`;
+    }
+
+    /**
      * 获取缓存的Customer ID
      */
     public getCachedCustomerId(token: string): string | null {
         try {
-            const cached = this.context.globalState.get<CachedCustomerData>(StateManager.CUSTOMER_CACHE_KEY);
-            
-            if (!cached) {
-                return null;
-            }
+            const cacheKey = this.getCustomerCacheKey(token);
+            const cached = this.context.globalState.get<CachedCustomerData>(cacheKey);
 
-            // 检查token是否匹配
-            if (cached.token !== token) {
-                // Token已更改，清除缓存
-                this.clearCustomerCache();
+            if (!cached) {
                 return null;
             }
 
@@ -48,14 +48,14 @@ export class StateManager {
             const now = Date.now();
             if (now - cached.timestamp > StateManager.CACHE_EXPIRY_MS) {
                 console.log('Customer ID缓存已过期，清除缓存');
-                this.clearCustomerCache();
+                this.clearCustomerCache(token);
                 return null;
             }
 
             // 检查Customer ID是否为空
             if (!cached.customerId || cached.customerId.trim() === '') {
                 console.log('缓存的Customer ID为空，清除缓存');
-                this.clearCustomerCache();
+                this.clearCustomerCache(token);
                 return null;
             }
 
@@ -71,13 +71,14 @@ export class StateManager {
      */
     public async cacheCustomerId(customerId: string, token: string): Promise<void> {
         try {
+            const cacheKey = this.getCustomerCacheKey(token);
             const cacheData: CachedCustomerData = {
                 customerId,
                 token,
                 timestamp: Date.now()
             };
 
-            await this.context.globalState.update(StateManager.CUSTOMER_CACHE_KEY, cacheData);
+            await this.context.globalState.update(cacheKey, cacheData);
             this._onStateChanged.fire();
         } catch (error) {
             console.error('缓存Customer ID失败:', error);
@@ -87,9 +88,22 @@ export class StateManager {
     /**
      * 清除Customer ID缓存
      */
-    public async clearCustomerCache(): Promise<void> {
+    public async clearCustomerCache(token?: string): Promise<void> {
         try {
-            await this.context.globalState.update(StateManager.CUSTOMER_CACHE_KEY, undefined);
+            if (token) {
+                // 清除特定token的缓存
+                const cacheKey = this.getCustomerCacheKey(token);
+                await this.context.globalState.update(cacheKey, undefined);
+            } else {
+                // 清除所有Customer ID缓存（用于兼容性）
+                // 获取所有存储的键
+                const keys = this.context.globalState.keys();
+                for (const key of keys) {
+                    if (key.endsWith('_CustomerID')) {
+                        await this.context.globalState.update(key, undefined);
+                    }
+                }
+            }
             this._onStateChanged.fire();
         } catch (error) {
             console.error('清除Customer ID缓存失败:', error);
@@ -108,7 +122,7 @@ export class StateManager {
                 return cachedId;
             } else if (cachedId === '') {
                 console.log('缓存的Customer ID为空，清除缓存并重新获取');
-                await this.clearCustomerCache();
+                await this.clearCustomerCache(token);
             }
         }
 
@@ -132,7 +146,7 @@ export class StateManager {
         } catch (error) {
             console.error('获取Customer ID失败:', error);
             // 清除可能的无效缓存
-            await this.clearCustomerCache();
+            await this.clearCustomerCache(token);
             throw error;
         }
     }
@@ -254,7 +268,7 @@ export class StateManager {
     public async clearAllCache(): Promise<void> {
         console.log('清除所有缓存');
         await Promise.all([
-            this.clearCustomerCache(),
+            this.clearCustomerCache(), // 清除所有Customer ID缓存
             this.clearBalanceCache()
         ]);
     }
