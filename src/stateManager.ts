@@ -1,20 +1,18 @@
 import * as vscode from 'vscode';
-import { ApiService, ApiError } from './apiService';
+import { ApiService, AccountInfo } from './apiService';
 
-export interface CachedCustomerData {
-    customerId: string;
-    token: string;
-    timestamp: number;
-}
-
-export interface BalanceData {
+export interface CachedAccountData {
+    customer_id: string;
+    email: string;
+    plan_name: string;
+    end_date: string | null;
     balance: string;
     timestamp: number;
+    token: string;
     error?: string;
 }
 
 export class StateManager {
-    private static readonly BALANCE_CACHE_KEY = 'augmentBalance.balanceCache';
     private static readonly CACHE_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24小时
 
     private context: vscode.ExtensionContext;
@@ -26,19 +24,19 @@ export class StateManager {
     }
 
     /**
-     * 生成Customer ID缓存键名
+     * 生成账号缓存键名
      */
-    private getCustomerCacheKey(token: string): string {
-        return `${token}_CustomerID`;
+    private getAccountCacheKey(token: string): string {
+        return `${token}_AccountInfo`;
     }
 
     /**
-     * 获取缓存的Customer ID
+     * 获取缓存的账号数据
      */
-    public getCachedCustomerId(token: string): string | null {
+    public getCachedAccountData(token: string): CachedAccountData | null {
         try {
-            const cacheKey = this.getCustomerCacheKey(token);
-            const cached = this.context.globalState.get<CachedCustomerData>(cacheKey);
+            const cacheKey = this.getAccountCacheKey(token);
+            const cached = this.context.globalState.get<CachedAccountData>(cacheKey);
 
             if (!cached) {
                 return null;
@@ -47,151 +45,113 @@ export class StateManager {
             // 检查缓存是否过期
             const now = Date.now();
             if (now - cached.timestamp > StateManager.CACHE_EXPIRY_MS) {
-                console.log('Customer ID缓存已过期，清除缓存');
-                this.clearCustomerCache(token);
+                console.log('账号数据缓存已过期，清除缓存');
+                this.clearAccountCache(token);
                 return null;
             }
 
-            // 检查Customer ID是否为空
-            if (!cached.customerId || cached.customerId.trim() === '') {
-                console.log('缓存的Customer ID为空，清除缓存');
-                this.clearCustomerCache(token);
-                return null;
-            }
-
-            return cached.customerId;
+            return cached;
         } catch (error) {
-            console.error('获取缓存Customer ID失败:', error);
+            console.error('获取缓存账号数据失败:', error);
             return null;
         }
     }
 
     /**
-     * 缓存Customer ID
+     * 缓存账号数据
      */
-    public async cacheCustomerId(customerId: string, token: string): Promise<void> {
+    public async cacheAccountData(accountData: CachedAccountData): Promise<void> {
         try {
-            const cacheKey = this.getCustomerCacheKey(token);
-            const cacheData: CachedCustomerData = {
-                customerId,
-                token,
-                timestamp: Date.now()
-            };
-
-            await this.context.globalState.update(cacheKey, cacheData);
+            const cacheKey = this.getAccountCacheKey(accountData.token);
+            await this.context.globalState.update(cacheKey, accountData);
             this._onStateChanged.fire();
         } catch (error) {
-            console.error('缓存Customer ID失败:', error);
+            console.error('缓存账号数据失败:', error);
         }
     }
 
     /**
-     * 清除Customer ID缓存
+     * 清除账号缓存
      */
-    public async clearCustomerCache(token?: string): Promise<void> {
+    public async clearAccountCache(token?: string): Promise<void> {
         try {
             if (token) {
                 // 清除特定token的缓存
-                const cacheKey = this.getCustomerCacheKey(token);
+                const cacheKey = this.getAccountCacheKey(token);
                 await this.context.globalState.update(cacheKey, undefined);
             } else {
-                // 清除所有Customer ID缓存（用于兼容性）
-                // 获取所有存储的键
+                // 清除所有账号缓存
                 const keys = this.context.globalState.keys();
                 for (const key of keys) {
-                    if (key.endsWith('_CustomerID')) {
+                    if (key.endsWith('_AccountInfo')) {
                         await this.context.globalState.update(key, undefined);
                     }
                 }
             }
             this._onStateChanged.fire();
         } catch (error) {
-            console.error('清除Customer ID缓存失败:', error);
+            console.error('清除账号缓存失败:', error);
         }
     }
 
     /**
-     * 获取或刷新Customer ID
+     * 获取或刷新账号信息
      */
-    public async getOrFetchCustomerId(token: string, forceRefresh: boolean = false): Promise<string> {
+    public async getOrFetchAccountInfo(token: string, forceRefresh: boolean = false): Promise<AccountInfo> {
         // 如果不强制刷新，先尝试从缓存获取
         if (!forceRefresh) {
-            const cachedId = this.getCachedCustomerId(token);
-            if (cachedId && cachedId.trim() !== '') {
-                console.log('使用缓存的Customer ID:', cachedId);
-                return cachedId;
-            } else if (cachedId === '') {
-                console.log('缓存的Customer ID为空，清除缓存并重新获取');
-                await this.clearCustomerCache(token);
+            const cachedData = this.getCachedAccountData(token);
+            if (cachedData && cachedData.customer_id && cachedData.customer_id.trim() !== '') {
+                console.log('使用缓存的账号信息:', cachedData.customer_id);
+                return {
+                    customer_id: cachedData.customer_id,
+                    email: cachedData.email,
+                    plan_name: cachedData.plan_name,
+                    end_date: cachedData.end_date
+                };
             }
         }
 
-        console.log('从API获取Customer ID, forceRefresh:', forceRefresh);
+        console.log('从API获取账号信息, forceRefresh:', forceRefresh);
 
         try {
-            // 从API获取
-            const customerId = await ApiService.getCustomerId(token);
+            // 从API获取账号信息
+            const accountInfo = await ApiService.getAccountInfo(token);
 
-            // 验证获取到的Customer ID
-            if (!customerId || customerId.trim() === '') {
+            // 验证获取到的账号信息
+            if (!accountInfo.customer_id || accountInfo.customer_id.trim() === '') {
                 throw new Error('API返回的Customer ID为空');
             }
 
-            // 缓存结果
-            await this.cacheCustomerId(customerId, token);
-
-            console.log('成功获取并缓存Customer ID:', customerId);
-            return customerId;
+            console.log('成功获取账号信息:', accountInfo.customer_id);
+            return accountInfo;
 
         } catch (error) {
-            console.error('获取Customer ID失败:', error);
+            console.error('获取账号信息失败:', error);
             // 清除可能的无效缓存
-            await this.clearCustomerCache(token);
+            await this.clearAccountCache(token);
             throw error;
-        }
-    }
-
-    /**
-     * 获取缓存的余额数据
-     */
-    public getCachedBalance(): BalanceData | null {
-        try {
-            return this.context.globalState.get<BalanceData>(StateManager.BALANCE_CACHE_KEY) || null;
-        } catch (error) {
-            console.error('获取缓存余额失败:', error);
-            return null;
-        }
-    }
-
-    /**
-     * 缓存余额数据
-     */
-    public async cacheBalance(balance: string): Promise<void> {
-        try {
-            const balanceData: BalanceData = {
-                balance,
-                timestamp: Date.now()
-            };
-
-            await this.context.globalState.update(StateManager.BALANCE_CACHE_KEY, balanceData);
-            this._onStateChanged.fire();
-        } catch (error) {
-            console.error('缓存余额失败:', error);
         }
     }
 
     /**
      * 缓存错误信息
      */
-    public async cacheError(error: string): Promise<void> {
+    public async cacheError(error: string, token: string): Promise<void> {
         try {
-            const balanceData: BalanceData = {
+            const errorData: CachedAccountData = {
+                customer_id: '',
+                email: '',
+                plan_name: '',
+                end_date: null,
                 balance: '',
                 timestamp: Date.now(),
+                token,
                 error
             };
 
-            await this.context.globalState.update(StateManager.BALANCE_CACHE_KEY, balanceData);
+            const cacheKey = this.getAccountCacheKey(token);
+            await this.context.globalState.update(cacheKey, errorData);
             this._onStateChanged.fire();
         } catch (error) {
             console.error('缓存错误信息失败:', error);
@@ -199,49 +159,38 @@ export class StateManager {
     }
 
     /**
-     * 清除余额缓存
+     * 获取完整账号信息（包括余额）
      */
-    public async clearBalanceCache(): Promise<void> {
+    public async fetchAccountInfo(token: string, forceRefresh: boolean = false): Promise<CachedAccountData> {
         try {
-            await this.context.globalState.update(StateManager.BALANCE_CACHE_KEY, undefined);
-            this._onStateChanged.fire();
-        } catch (error) {
-            console.error('清除余额缓存失败:', error);
-        }
-    }
-
-    /**
-     * 获取余额
-     */
-    public async fetchBalance(token: string, forceRefresh: boolean = false): Promise<string> {
-        try {
-            // 获取Customer ID（如果强制刷新则重新获取）
-            let customerId = await this.getOrFetchCustomerId(token, forceRefresh);
-
-            // Customer ID空值检查
-            if (!customerId || customerId.trim() === '') {
-                console.log('Customer ID为空，强制重新获取');
-                customerId = await this.getOrFetchCustomerId(token, true);
-
-                if (!customerId || customerId.trim() === '') {
-                    throw new Error('无法获取有效的Customer ID');
-                }
-            }
+            // 获取账号基础信息
+            const accountInfo = await this.getOrFetchAccountInfo(token, forceRefresh);
 
             // 获取余额
-            const balance = await ApiService.getBalance(customerId, token);
+            const balance = await ApiService.getBalance(accountInfo.customer_id, token);
 
-            // 缓存结果
-            await this.cacheBalance(balance);
+            // 构建完整的账号数据
+            const fullAccountData: CachedAccountData = {
+                customer_id: accountInfo.customer_id,
+                email: accountInfo.email,
+                plan_name: accountInfo.plan_name,
+                end_date: accountInfo.end_date,
+                balance: balance,
+                timestamp: Date.now(),
+                token: token
+            };
 
-            return balance;
+            // 缓存完整数据
+            await this.cacheAccountData(fullAccountData);
+
+            return fullAccountData;
 
         } catch (error) {
-            // 余额获取失败时的容错处理
-            console.log('余额获取失败，清除缓存:', error);
+            // 获取失败时的容错处理
+            console.log('账号信息获取失败，清除缓存:', error);
 
-            // 自动清空所有缓存，确保下次能重新获取正确数据
-            await this.clearAllCache();
+            // 自动清空缓存，确保下次能重新获取正确数据
+            await this.clearAccountCache(token);
 
             // 重新抛出错误，让上层处理
             throw error;
@@ -249,15 +198,23 @@ export class StateManager {
     }
 
     /**
+     * 获取余额（保持向后兼容）
+     */
+    public async fetchBalance(token: string, forceRefresh: boolean = false): Promise<string> {
+        const accountData = await this.fetchAccountInfo(token, forceRefresh);
+        return accountData.balance;
+    }
+
+    /**
      * 验证缓存有效性
      */
-    public validateCache(token: string): { isCustomerIdValid: boolean; isBalanceValid: boolean } {
-        const customerIdValid = this.getCachedCustomerId(token) !== null;
-        const balanceData = this.getCachedBalance();
-        const balanceValid = balanceData !== null && !balanceData.error;
+    public validateCache(token: string): { isAccountInfoValid: boolean; isBalanceValid: boolean } {
+        const accountData = this.getCachedAccountData(token);
+        const accountInfoValid = accountData !== null && accountData.customer_id !== '';
+        const balanceValid = accountData !== null && !accountData.error && accountData.balance !== '';
 
         return {
-            isCustomerIdValid: customerIdValid,
+            isAccountInfoValid: accountInfoValid,
             isBalanceValid: balanceValid
         };
     }
@@ -267,10 +224,36 @@ export class StateManager {
      */
     public async clearAllCache(): Promise<void> {
         console.log('清除所有缓存');
-        await Promise.all([
-            this.clearCustomerCache(), // 清除所有Customer ID缓存
-            this.clearBalanceCache()
-        ]);
+        await this.clearAccountCache(); // 清除所有账号缓存
+    }
+
+    /**
+     * 清理过期的缓存数据
+     */
+    public async cleanupExpiredCache(): Promise<void> {
+        try {
+            const keys = this.context.globalState.keys();
+            const now = Date.now();
+            let cleanedCount = 0;
+
+            for (const key of keys) {
+                if (key.endsWith('_AccountInfo')) {
+                    const cached = this.context.globalState.get<CachedAccountData>(key);
+                    if (cached && (now - cached.timestamp > StateManager.CACHE_EXPIRY_MS)) {
+                        await this.context.globalState.update(key, undefined);
+                        cleanedCount++;
+                        console.log(`清理过期缓存: ${key}`);
+                    }
+                }
+            }
+
+            if (cleanedCount > 0) {
+                console.log(`清理了 ${cleanedCount} 个过期缓存项`);
+                this._onStateChanged.fire();
+            }
+        } catch (error) {
+            console.error('清理过期缓存失败:', error);
+        }
     }
 
     public dispose(): void {

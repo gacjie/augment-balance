@@ -65,6 +65,9 @@ export class AugmentBalanceExtension {
         // 初始化lastToken
         this.lastToken = config.token;
 
+        // 清理过期缓存
+        await this.stateManager.cleanupExpiredCache();
+
         if (!validation.isValid) {
             this.statusBarManager.setNotConfigured();
             return;
@@ -92,19 +95,22 @@ export class AugmentBalanceExtension {
 
         // 检查token是否发生变化
         const tokenChanged = this.lastToken !== config.token;
+        const oldToken = this.lastToken; // 保存旧token用于清理缓存
         this.lastToken = config.token;
 
         let forceRefresh = tokenChanged;
 
         if (tokenChanged) {
-            // Token变化时，清除所有缓存并强制刷新
-            console.log('Token已变更，清除缓存并强制刷新');
-            await this.stateManager.clearAllCache();
+            // Token变化时，清除旧token的缓存并强制刷新
+            console.log('Token已变更，清除旧token缓存并强制刷新');
+            if (oldToken) {
+                await this.stateManager.clearAccountCache(oldToken);
+            }
         } else {
             // 即使token没变，也要验证缓存有效性
             const cacheValidation = this.stateManager.validateCache(config.token);
-            if (!cacheValidation.isCustomerIdValid) {
-                console.log('Customer ID缓存无效，强制刷新');
+            if (!cacheValidation.isAccountInfoValid) {
+                console.log('账号信息缓存无效，强制刷新');
                 forceRefresh = true;
             }
         }
@@ -151,17 +157,21 @@ export class AugmentBalanceExtension {
         this.isUpdating = true;
 
         try {
-            this.statusBarManager.setLoading();
+            // 获取当前缓存数据用于加载状态显示
+            const cachedData = this.stateManager.getCachedAccountData(config.token);
+            this.statusBarManager.setLoading(cachedData);
 
-            const balance = await this.stateManager.fetchBalance(config.token, forceRefresh);
-            this.statusBarManager.setNormal(balance);
+            const accountData = await this.stateManager.fetchAccountInfo(config.token, forceRefresh);
+            this.statusBarManager.setNormal(accountData);
 
         } catch (error) {
             const apiError = error as ApiError;
             const errorMessage = apiError.message || '未知错误';
-            
-            await this.stateManager.cacheError(errorMessage);
-            this.statusBarManager.setError(errorMessage);
+
+            // 获取当前缓存数据用于错误状态显示
+            const cachedData = this.stateManager.getCachedAccountData(config.token);
+            await this.stateManager.cacheError(errorMessage, config.token);
+            this.statusBarManager.setError(errorMessage, cachedData);
 
             // 如果是认证错误，提示用户检查配置
             if (apiError.statusCode === 401 || apiError.statusCode === 403) {
@@ -182,9 +192,9 @@ export class AugmentBalanceExtension {
     private updateStatusBar(): void {
         const config = this.configManager.getConfig();
         const validation = this.configManager.validateConfig(config);
-        const balanceData = this.stateManager.getCachedBalance();
+        const accountData = this.stateManager.getCachedAccountData(config.token);
 
-        this.statusBarManager.updateFromCache(balanceData, validation.isValid);
+        this.statusBarManager.updateFromCache(accountData, validation.isValid);
     }
 
     public dispose(): void {

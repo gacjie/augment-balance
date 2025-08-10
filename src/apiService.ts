@@ -1,9 +1,23 @@
 import axios, { AxiosResponse, AxiosError } from 'axios';
 
-export interface CustomerResponse {
-    customer: {
-        id: string;
-    };
+export interface SubscriptionResponse {
+    data: Array<{
+        customer: {
+            id: string;
+            email: string;
+        };
+        plan: {
+            name: string;
+        };
+        end_date: string | null;
+    }>;
+}
+
+export interface AccountInfo {
+    customer_id: string;
+    email: string;
+    plan_name: string;
+    end_date: string | null;
 }
 
 export interface BalanceResponse {
@@ -22,13 +36,13 @@ export class ApiService {
     private static readonly PRICING_UNIT_ID = 'jWTJo9ptbapMWkvg';
 
     /**
-     * 获取Customer ID
+     * 获取账号信息
      */
-    public static async getCustomerId(token: string): Promise<string> {
+    public static async getAccountInfo(token: string): Promise<AccountInfo> {
         try {
-            const url = `${this.BASE_URL}/customer_from_link?token=${encodeURIComponent(token)}`;
-            
-            const response: AxiosResponse<CustomerResponse> = await axios.get(url, {
+            const url = `${this.BASE_URL}/subscriptions_from_link?token=${encodeURIComponent(token)}`;
+
+            const response: AxiosResponse<SubscriptionResponse> = await axios.get(url, {
                 headers: {
                     'User-Agent': this.USER_AGENT,
                     'Accept': 'application/json',
@@ -37,13 +51,23 @@ export class ApiService {
                 timeout: 10000 // 10秒超时
             });
 
-            if (!response.data || !response.data.customer || !response.data.customer.id) {
-                throw new Error('API响应格式错误：缺少customer.id字段');
+            if (!response.data || !response.data.data || !Array.isArray(response.data.data) || response.data.data.length === 0) {
+                throw new Error('API响应格式错误：缺少data数组或数组为空');
             }
 
-            return response.data.customer.id;
+            const subscription = response.data.data[0];
+            if (!subscription.customer || !subscription.customer.id || !subscription.customer.email || !subscription.plan || !subscription.plan.name) {
+                throw new Error('API响应格式错误：缺少必要的账号信息字段');
+            }
+
+            return {
+                customer_id: subscription.customer.id,
+                email: subscription.customer.email,
+                plan_name: subscription.plan.name,
+                end_date: subscription.end_date
+            };
         } catch (error) {
-            throw this.handleApiError(error, '获取Customer ID失败');
+            throw this.handleApiError(error, '获取账号信息失败');
         }
     }
 
