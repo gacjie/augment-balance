@@ -2,7 +2,7 @@
   "name": "augment-balance",
   "displayName": "Augment Balance",
   "description": "Display remaining quota for Augment Code API usage",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "publisher": "gacjie",
   "license": "MIT",
   "author": {
